@@ -1,0 +1,156 @@
+# -*- coding: utf-8 -*-
+""""
+Created on Thu Aug  9 19:54:15 2018 
+@author: REW. Radar_Jamming_Laboratory. 204-{Shixun You}
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+          _______ _        ____________
+         /  ___  \ \      /  _______/_/  Radar_Jamming_Laboratory_
+        /  /   / / /     /  / /          \  \    /     \    /  / /
+       /  /___/ / /     /  /_/_______     \  \  /  / \  \  /  / /
+      /     ___/_/     /  ________/_/      \  \/  / / \  \/  / /
+     /  /\  \ \       /  / /                \    / /   \    / /
+    /  / /\  \ \     /  /_/_______           \  / /     \  / /
+   /__/_/  \__\_\   /__________/_/  21A204    \/_/       \/_/
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+"""
+import util
+import _para_with_boundry
+import resources
+import radar
+import counterPhy
+
+#import pyglet
+import numpy as np
+import numpy.random as npr
+
+"Generate countermeasure objects with random positions"
+
+PIX_PRO = 0.025 # 25x25 m2 =1 pixel
+
+MAP_CENTER = np.array([300, 300]) 
+
+H_MAX, H_MIN = 8.0, 0.5
+
+PLAYER_TYPE = {
+               'Default'      : resources.default_image,
+               'Station'      : resources.station_image,
+               'UCAV'         : resources.UCAV_image,
+               'Missile'      : resources.missile_image
+}
+
+def playerGenerate(
+                   _type=None, 
+                   _id=None,
+                   _scale=None,
+                   father=None, 
+                   site=None,                     
+                   batch=None, 
+                   group=None
+    ):
+    
+    if _id is None: _id = 1
+    
+    if site is None: site = util.locationRandom(MAP_CENTER)[0]
+    
+    if _scale is None: _scale= 0.2
+    
+    if _type is 'Station':
+        
+        player = counterPhy.CounterPhy(
+                                       img=PLAYER_TYPE[_type], 
+                                       x=site[0], 
+                                       y=site[1], 
+                                       batch=batch, 
+                                       group=group
+        )
+        
+        player.rotate_speed = 2   
+        
+        player.vMov = np.array([0., 0., 1.]) 
+        
+        player.have_radar = True # add radar
+        
+        player.radar = radar.Radar(player.spherePos, player.h)                     
+        
+        player.attPolicy = _para_with_boundry.para(-1, len(player.radar.TAP)-1)
+        
+        player.kidsARM = []
+                  
+    elif _type is 'UCAV':
+        
+        player = counterPhy.CounterPhy(
+                                       img=PLAYER_TYPE[_type], 
+                                       x=site[0], 
+                                       y=site[1], 
+                                       batch=batch, 
+                                       group=group
+        )
+        
+        player.v.real = player.v.upper = 0.30
+        
+        player.vMotion = player.vMov*player.v.real                
+
+        player.have_radar = True
+        
+        player.radar = radar.Radar(player.spherePos, player.h)                     
+        
+        player.attPolicy = _para_with_boundry.para(-1, len(player.radar.TAP)-1)
+        
+        player.kidsARM = []
+                            
+    elif _type is 'Missile':
+        
+        player = counterPhy.CounterPhy(
+                                       img=PLAYER_TYPE[_type], 
+                                       x=father.x, 
+                                       y=father.y, 
+                                       batch=father.batch, 
+                                       group=father.group
+        )      
+                  
+        player.h = _para_with_boundry.para(father.h.real, father.h.upper, father.h.lower)
+        
+        player.spherePos[0:3] = father.spherePos[0:3]
+        
+        player.vMov = father.vMov[0:3]
+      
+        player.v.real = player.v.upper = 0.60
+        
+        player.vMotion = player.vMov*player.v.real
+         
+    if father is None:
+            
+        player.h.upper, player.h.lower = H_MAX, H_MIN
+        
+        player.h.random(0.5)
+            
+        player.spherePos[0:2] = (player.spherePos[0:2]-MAP_CENTER) * PIX_PRO 
+          
+        player.spherePos[2] = util.coordinateSphere(player.spherePos, player.h.real) 
+        
+#        player.pointState.append(np.concatenate((player.spherePos[0:2], [player.h.real])))
+        
+    player._type = _type   
+        
+    player._id = _id
+    
+    player.frame_change()
+    
+    player.scale = _scale  
+    
+    return player
+
+""                                                                           ""
+"""---------------------------------test fuction----------------------------"""
+""                                                                           ""  
+if __name__ == '__main__':
+    
+    player = playerGenerate(
+                            _type='UCAV', 
+                            _id=1,                                           
+                            _scale=0.3
+    )
+         
