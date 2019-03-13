@@ -1,0 +1,211 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Aug  9 19:54:15 2018
+@author: 204-{Shixun You}
+"""
+
+import util
+import _para_with_boundry
+import observation
+
+from math import *
+import numpy as np
+import numpy.random as npr
+
+R_EARTH = 6371.0
+
+H_MAX, H_MIN = 8.0, 0.5
+
+PIX_PRO = 0.025 # 25x25 m2 =1 pixel
+
+class Radar:
+    
+    """radar with counter properties""" 
+    
+    # initialization
+    Q_PARA = {
+              'Search'  : {'UMAX': 0.2, 'UMIN':  0.05, 'F': 0.8},
+          
+              'Tracking': {'UMAX': 0.1, 'UMIN': 0.025, 'F': 0.9}
+    }
+    
+    P_best = 1.0 # without jamming, radar's detecting peiformance alaways keep the best
+    
+    def __init__(self, Pos, h):
+        
+        self.spherePos = Pos 
+        
+        self.h = h
+             
+        self.mode = 'Search'
+        
+        self.dR = {
+                   'Search'  : 25,
+                   
+                   'Tracking': 3
+        } # detection range (km)
+        
+        self.targetPackets = {}
+        
+        self.TAP = []
+        
+        self.TIM = []
+              
+        self.cFactor = 0.0
+        
+        self.jammedTechs = []      
+             
+    #--------------------------------------------------------------------------         
+    def operation(self, target, dis, vis):
+        
+        "单雷达目标分析"                           
+
+        if vis:
+            
+            self.countering()
+            
+            Qc = npr.random() / (np.clip((1-self.cFactor) * self.P_best, 1e-10, 1))   
+            
+            if Qc >= 1: # 任务失败，继承 
+                
+                predict = True
+                
+            else: # 本地更新 
+                   
+                predict = False            
+        else: 
+             
+            predict = True
+
+        # checking
+        name = target._type+str(target._id)
+        
+        if name in self.targetPackets.keys(): # find in Lib
+            
+                self.targetPackets[name].dis_real = dis
+                
+                self.targetPackets[name].vel_real = target.v.real
+
+                self.localQ(name, predict, False) # modify existing objects
+        else:
+            
+            if not predict:
+                
+                self.targetPackets[name] = observation.Observation(
+                                                                   target=target,
+                                                                   dis_real=dis,
+                                                                   cur_N=0,
+                                                                   _mode=self.mode,
+                                                                   P=1.0,
+                                                                   Q=1.0                                                                   
+                )
+                
+                self.TIM = [target]
+                
+                self.localQ(name, predict, True) # add a new object
+                
+    #--------------------------------------------------------------------------                                                                     
+    def countering(self):
+        
+        "判断干扰机对雷达造成的影响" 
+        
+        if self.jammedTechs: 0
+        
+        else: 1
+       
+    #--------------------------------------------------------------------------                          
+    def localQ(self, name, predict, is_First):
+        
+        "计算品质因子, 且对可攻击库送检"
+        
+        Q_P = self.Q_PARA[self.mode]
+        
+        obser = self.targetPackets[name]
+
+        if is_First:
+            
+            obser.all_N = obser.cur_N = 0
+        
+            obser.Q = Q_P['UMAX']            
+       
+        elif obser._mode != self.mode: # 未发生模式切换
+                
+            obser.cur_N = 0
+                
+            obser._mode = self.mode
+                
+        obser.P = 1-Q_P['F'] * (1-obser.Q)        
+                   
+        if not predict:
+            
+            N_ = obser.cur_N+1
+                 
+            th = pi/2*np.clip(npr.normal(0, 1/3), -1, 1)
+        
+            fi = atan(sin(th) / (Q_P['UMAX']/obser.P+cos(th)))
+        
+            obser.Q = Q_P['UMIN']+Q_P['UMAX']*self.Q_get(cos(fi)) * (0.99**N_)
+
+            obser.rest = 0
+            
+            obser.cur_N = N_
+            
+            obser.all_N += 1
+        
+        else:
+            
+            obser.Q = obser.P
+      
+            obser.rest += 1   
+            
+            if obser.rest > 3: # 删除确认丢失的目标
+                
+                self.targetPackets.pop(name)
+                
+        if name in self.targetPackets.keys():     
+                          
+            obser.stateEstimation(self.spherePos)
+                
+            disE = obser.dis_real*obser.Q
+            
+            if disE < 0.2: # update TAP
+                
+                self.TAP.append(name)
+                 
+            elif name in self.TAP: self.TAP.remove(name)
+            
+    #--------------------------------------------------------------------------         
+    def Q_get(self, umin):
+   
+        Q = (1+umin) / 2 
+        
+        return Q
+                
+    #--------------------------------------------------------------------------         
+    def checkingLib(self):
+        
+        "库检查"
+        
+        names = sorted(self.targetPackets.keys())
+        
+        for name_1 in names:
+            
+            if self.targetPackets[name_1].realBody.is_dead: self.targetPackets.pop(name_1)
+            
+        TAP = self.TAP[:]
+                                        
+        for name_2 in TAP:
+            
+            if name_2 not in self.targetPackets.keys(): self.TAP.remove(name_2)
+        
+    #--------------------------------------------------------------------------         
+    def routine_mode_choose(self): 
+        
+        self.mode = 'Search' 
+                
+        for name in self.targetPackets.keys():
+                    
+            if self.targetPackets[name].detection['dis'] < self.dR['Tracking']: 
+                        
+                self.mode = 'Tracking'    
+    
