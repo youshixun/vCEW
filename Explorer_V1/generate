@@ -1,25 +1,11 @@
 # -*- coding: utf-8 -*-
 """"
 Created on Thu Aug  9 19:54:15 2018 
-@author: REW. Radar_Jamming_Laboratory. 204-{Shixun You}
-
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-          _______ _        ____________
-         /  ___  \ \      /  _______/_/  Radar_Jamming_Laboratory_
-        /  /   / / /     /  / /          \  \    /     \    /  / /
-       /  /___/ / /     /  /_/_______     \  \  /  / \  \  /  / /
-      /     ___/_/     /  ________/_/      \  \/  / / \  \/  / /
-     /  /\  \ \       /  / /                \    / /   \    / /
-    /  / /\  \ \     /  /_/_______           \  / /     \  / /
-   /__/_/  \__\_\   /__________/_/  21A204    \/_/       \/_/
-
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+@author: Radar_Jamming_Laboratory. 204-{Shixun You}
 
 """
 import util
-import _para_with_boundry
 import resources
-import radar
 import counterPhy
 
 #import pyglet
@@ -32,8 +18,6 @@ PIX_PRO = 0.025 # 25x25 m2 =1 pixel
 
 MAP_CENTER = np.array([300, 300]) 
 
-H_MAX, H_MIN = 8.0, 0.5
-
 PLAYER_TYPE = {
                'Default'      : resources.default_image,
                'Station'      : resources.station_image,
@@ -44,7 +28,6 @@ PLAYER_TYPE = {
 def playerGenerate(
                    _type=None, 
                    _id=None,
-                   _scale=None,
                    father=None, 
                    site=None,                     
                    batch=None, 
@@ -55,8 +38,6 @@ def playerGenerate(
     
     if site is None: site = util.locationRandom(MAP_CENTER)[0]
     
-    if _scale is None: _scale= 0.2
-    
     if _type is 'Station':
         
         player = counterPhy.CounterPhy(
@@ -66,18 +47,6 @@ def playerGenerate(
                                        batch=batch, 
                                        group=group
         )
-        
-        player.rotate_speed = 2   
-        
-        player.vMov = np.array([0., 0., 1.]) 
-        
-        player.have_radar = True # add radar
-        
-        player.radar = radar.Radar(player.spherePos, player.h)                     
-        
-        player.attPolicy = _para_with_boundry.para(-1, len(player.radar.TAP)-1)
-        
-        player.kidsARM = []
                   
     elif _type is 'UCAV':
         
@@ -88,19 +57,7 @@ def playerGenerate(
                                        batch=batch, 
                                        group=group
         )
-        
-        player.v.real = player.v.upper = 0.30
-        
-        player.vMotion = player.vMov*player.v.real                
-
-        player.have_radar = True
-        
-        player.radar = radar.Radar(player.spherePos, player.h)                     
-        
-        player.attPolicy = _para_with_boundry.para(-1, len(player.radar.TAP)-1)
-        
-        player.kidsARM = []
-                            
+                                   
     elif _type is 'Missile':
         
         player = counterPhy.CounterPhy(
@@ -109,37 +66,11 @@ def playerGenerate(
                                        y=father.y, 
                                        batch=father.batch, 
                                        group=father.group
-        )      
-                  
-        player.h = _para_with_boundry.para(father.h.real, father.h.upper, father.h.lower)
+        )   
         
-        player.spherePos[0:3] = father.spherePos[0:3]
-        
-        player.vMov = father.vMov[0:3]
-      
-        player.v.real = player.v.upper = 0.60
-        
-        player.vMotion = player.vMov*player.v.real
-         
-    if father is None:
-            
-        player.h.upper, player.h.lower = H_MAX, H_MIN
-        
-        player.h.random(0.5)
-            
-        player.spherePos[0:2] = (player.spherePos[0:2]-MAP_CENTER) * PIX_PRO 
-          
-        player.spherePos[2] = util.coordinateSphere(player.spherePos, player.h.real) 
-        
-#        player.pointState.append(np.concatenate((player.spherePos[0:2], [player.h.real])))
-        
-    player._type = _type   
-        
+    player.init_type(_type=_type, father=father)
+#        player.pointState.append(np.concatenate((player.spherePos[0:2], [player.h.real])))                  
     player._id = _id
-    
-    player.frame_change()
-    
-    player.scale = _scale  
     
     return player
 
@@ -148,9 +79,5 @@ def playerGenerate(
 ""                                                                           ""  
 if __name__ == '__main__':
     
-    player = playerGenerate(
-                            _type='UCAV', 
-                            _id=1,                                           
-                            _scale=0.3
-    )
+    player = playerGenerate(_type='UCAV', _id=1)
          
