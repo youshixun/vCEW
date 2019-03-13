@@ -1,0 +1,91 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Oct 14 10:55:48 2018
+@author: Administrator
+"""
+
+import util
+import math
+import numpy.random as npr
+
+class Observation:   
+    
+    "target observation in detection lib" 
+    
+    def __init__(          
+                 self, 
+                 target=None, 
+                 dis_real=None,
+                 cur_N=None,
+                 _mode=None,
+                 P=None,
+                 Q=None               
+        ):
+       
+        self.realBody = target
+        
+        self.dis_real = dis_real
+        
+        self.vel_real = target.v.real
+        
+        self._mode = _mode
+        
+        self.P = P
+        
+        self.Q = Q
+
+#        self.in_TAP = 0              
+        
+        self.cur_N = 0
+        
+        self.all_N = 0
+        
+        self.rest = 0
+        
+        self.detection = {} 
+        
+    #-------------------------------------------------------------------------- 
+    def caculatingError(self):
+        
+        "计算误差"
+    
+        return self.dis_real*self.Q, self.vel_real*self.Q
+    
+    #--------------------------------------------------------------------------    
+    def stateEstimation(self, radarPos):
+        
+        "估计目标的运动状态"
+        
+        disE, vE = self.caculatingError()
+                   
+        while 1:
+            
+            angles = npr.uniform(-1, 1, 2)*math.pi*[1, 0.5]
+            
+            vec_d = util.unitV(angles)
+        
+            Pos = self.realBody.spherePos+disE*vec_d
+            
+            dis, vec = util.displacement(Pos, radarPos) 
+            
+            h = util.coordinateHeight(Pos)
+             
+            if h > 0: 
+                
+                break
+        
+        angles = npr.uniform(-1, 1, 2)*math.pi*[1, 0.5]
+        
+        vec_v = util.unitV(angles)
+        
+        vMotion = self.realBody.vMotion+vE*vec_v # 暂时不添加状态监测
+        
+        self.detection['dis'] = dis
+         
+        self.detection['Pos'] = Pos   
+        
+        self.detection['h'] = h
+        
+        self.detection['vMotion'] = vMotion
+        
+        
