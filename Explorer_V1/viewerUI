@@ -1,0 +1,184 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Aug  9 19:54:15 2018
+@author: 204-{Shixun You}
+"""
+
+import pyglet
+
+class ViewerUI(pyglet.window.Window):
+    
+    "对抗过程可视化" 
+        
+    dt = 1
+    
+    font_size = 9
+    
+    def __init__(self, *args, **kwargs):
+        
+        # vsync=False to speed up training
+        super(ViewerUI, self).__init__(*args, **kwargs) 
+        
+        # pyglet.gl.glClearColor(1, 1, 1, 1)     
+       
+        self.batch = pyglet.graphics.Batch()  
+        
+        self.background = pyglet.graphics.OrderedGroup(0)
+        
+        self.foreground = pyglet.graphics.OrderedGroup(1) 
+        
+        self.OperatingStep = 0
+                     
+        self.Operating_step_label = pyglet.text.Label(
+                                                      text='Operating Step: 0', 
+                                                      x=610, y=560, font_size=self.font_size,                                                       
+                                                      batch=self.batch, group=self.foreground
+        )  
+
+        self.sample_time = pyglet.text.Label(
+                                             text='Sample Time (s): '+str(self.dt),                                             
+                                             x=850, y=560, font_size=self.font_size,
+                                             batch=self.batch, group=self.foreground
+        )  
+        
+        self.winner_label = pyglet.text.Label(
+                                              text='Winner: None',
+                                              color=(255, 0, 0, 255),                                             
+                                              x=610, y=540, font_size=self.font_size,
+                                              batch=self.batch, group=self.foreground
+        )  
+        
+        self.attacker_label = pyglet.text.Label(
+                                                text='Attacker Attributes', 
+                                                x=740, y=510, font_size=self.font_size, 
+                                                batch=self.batch, group=self.foreground
+        )
+        
+        self.defender_label = pyglet.text.Label(
+                                                text='Defender Attributes', 
+                                                x=740, y=260, font_size=self.font_size, 
+                                                batch=self.batch, group=self.foreground
+        )
+        
+        self.attributes_labels = {'attacker': self.layout(610, 500, 130, -20)}
+       
+        self.attributes_labels['defender'] = self.layout(610, 250, 130, -20)
+    
+    def layout(self, x, y, dx, dy):
+    
+        labels = {
+                
+                  'name': pyglet.text.Label(
+                                            text='Name:\nSpace Pos (km) :',
+                                            multiline=True, width=150, height=200,
+                                            x=x, y=y+dy, font_size=self.font_size, 
+                                            batch=self.batch, group=self.foreground
+                  ), 
+
+                  'speed': pyglet.text.Label(
+                                             text="Speed (km/s): ",
+                                             color=(255, 255, 155, 255),
+                                             multiline=True, width=150, height=200,
+                                             x=x+dx, y=y+dy, font_size=self.font_size, 
+                                             batch=self.batch, group=self.foreground
+                  ),
+                  
+                  'travel': pyglet.text.Label(
+                                                 text="Distance Traveled (km): ",
+                                                 color=(255, 255, 155, 255),
+                                                 x=x+dx, y=y+2*dy, font_size=self.font_size, 
+                                                 batch=self.batch, group=self.foreground
+                  ),
+                  
+                  'radar_mode': pyglet.text.Label(
+                                                  text='Radar Mode: None', 
+                                                  color=(255, 255, 155, 255),
+                                                  x=x+dx, y=y+3*dy, font_size=self.font_size, 
+                                                  batch=self.batch, group=self.foreground
+                  ),            
+                                                               
+                  'targetPackets': pyglet.text.Label(
+                                                     text='Target Info: \nNo target detected',
+                                                     multiline=True, width=550, height=200,
+                                                     color=(155, 255, 255, 255),
+                                                     x=x, y=y+9*dy, font_size=self.font_size, 
+                                                     batch=self.batch, group=self.foreground
+                  ),                                            
+                                                      
+                  'ARM': pyglet.text.Label(
+                                           text='ARM: None\nspace Pos (km): ', 
+                                           multiline=True, width=150, height=200,
+                                           x=x+300, y=y+dy, font_size=self.font_size, 
+                                           batch=self.batch, group=self.foreground
+                   )
+                  }
+        
+        return labels 
+    
+    def update_attributes(self, player, player_type):
+            
+        """
+        更新显示界面
+        """       
+        
+        labels = self.attributes_labels[player_type]
+                
+        # show for attacker's ID 
+        labels['name'].text = 'Name: '+player._type+str(player._id)+'\nSpace Pos (km): '+'\nx = '+str(round(player.spherePos[0], 2)) \
+                                                                                        +'\ny = '+str(round(player.spherePos[1], 2)) \
+                                                                                        +'\nz = '+str(round(player.spherePos[2], 2)) \
+                                                                                        +'\nh = '+str(round(player.h.real, 2)) \
+                                                                   +'\nv Motion (km/s): '\
+                                                                                        +'\nvx = '+str(round(player.vMotion[0], 2)) \
+                                                                                        +'\nvy = '+str(round(player.vMotion[1], 2)) \
+                                                                                        +'\nvz = '+str(round(player.vMotion[2], 2)) 
+        # show for attacker's dectection                                                                                            
+        if player.have_radar:
+            
+            radar = player.radar 
+            
+            if radar.targetPackets:
+            
+                ctext = 'Target Info: '
+                                                              
+                names = sorted(radar.targetPackets.keys())
+                
+                for name in names:        
+            
+                    Dis = str(round(radar.targetPackets[name].dis_real, 2))
+                    
+                    CUR_N = str(round(radar.targetPackets[name].cur_N, 2))
+                    
+                    ALL_N = str(round(radar.targetPackets[name].all_N, 2))
+                    
+                    Rest = str(round(radar.targetPackets[name].rest, 2))
+                    
+                    Q = str(round(radar.targetPackets[name].Q, 3))
+                
+                    ctext += '\n'+name+' -- Dis (km): '+Dis+' -- AN: '+ALL_N+' -- CN: '+CUR_N+' -- Rest: '+Rest+' -- Q: '+Q
+                
+                labels['targetPackets'].text = ctext
+            
+            else: labels['targetPackets'].text  = 'Target Info: \nNo target detected'    
+        
+        labels['speed'].text = 'Speed (km/s): '+str(round(player.v.real, 2))
+           
+        labels['travel'].text = 'Dis Traveled (km): '+str(round(player.travel, 2))
+        
+        labels['radar_mode'].text = 'Radar Mode: '+player.radar.mode
+        
+        if player.kidsARM:
+            
+            for ARM_ in player.kidsARM:
+            
+                labels['ARM'].text = 'ARM: '+ARM_[0]._type+str(ARM_[0]._id)+'\nSpace Pos (km): '+'\nx = '+str(round(ARM_[0].spherePos[0], 2)) \
+                                                                           +'\ny = '+str(round(ARM_[0].spherePos[1], 2)) \
+                                                                           +'\nz = '+str(round(ARM_[0].spherePos[2], 2)) \
+                                                                           +'\nh = '+str(round(ARM_[0].h.real, 2)) \
+                                                                           +'\nSpeed (km/s): '+str(round(ARM_[0].v.real, 2)) \
+                                                                           +'\nTravel Dis(km): '+str(round(ARM_[0].travel, 2)) 
+                
+        else: labels['ARM'].text = 'ARM: None\nspace Pos (km): '
+              
+        
+                         
