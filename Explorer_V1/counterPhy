@@ -1,0 +1,430 @@
+# -*- coding: utf-8 -*-
+""""
+Created on Thu Aug  9 19:54:15 2018 
+@author: Radar_Jamming_Laboratory. 204-{Shixun You}
+"""
+
+import util 
+import radar
+import _para_with_boundry
+import pyglet
+from math import *
+import numpy as np
+import numpy.random as npr
+
+PIX_PRO = 0.025 # 25x25 m2 =1 pixel
+
+R_EARTH = 6371.0
+
+H_MAX, H_MIN = 8.0, 0.5
+
+OVERLOAD = {
+            'Station': np.array([ 3,  3]),
+            'UCAV'   : np.array([8, 8]),
+            'Missile': np.array([35, 35]),                       
+}
+
+MAP_CENTER = np.array([300, 300])
+
+class CounterPhy(pyglet.sprite.Sprite):
+    
+    "A sprite with counter properties"        
+    
+    def __init__(self, *args, **kwargs):
+        
+        super(CounterPhy, self).__init__(*args, **kwargs)
+        
+        # model as a cylinder       
+        self.volume = 0.5*np.array([self.image.width, self.image.height]) 
+
+        self.RCS = 1.0
+        
+        self.re_init(site='init')
+        
+    #--------------------------------------------------------------------------    
+    def re_init(self, site=None, batch=None, group=None):
+                
+        self.batch, self.group = batch, group
+        
+        if site is not 'init': #reinit
+             
+            [self.x, self.y] = util.locationRandom(MAP_CENTER)[0] if (site is None) else site 
+        
+        self.spherePos = np.array([self.x, self.y, 0.0])
+        
+        self._Cxyz = {}
+        
+        self.pointState = []
+        
+        self.path = []
+        
+        self.h = _para_with_boundry.para(0.)
+        
+        self.vMov = util.unitV(npr.uniform(-1, 1, 2) * pi * [1, 0.5])      
+        
+        self.v = _para_with_boundry.para(0.)
+        
+        self.vMotion = self.vMov*self.v.real
+        
+        self.aMotion = np.array([0., 0., 0.])
+        
+        self.travel = 0
+        
+        # flags
+        self.is_dead = False  
+        
+        self.have_radar = True
+        
+        self.have_jammer = False
+        
+        # missile
+        self.Num = {'missiles': 0} 
+        
+    #--------------------------------------------------------------------------   
+    def init_type(self, _type=None, father=None, _scale=0.3):
+        
+        if _type is 'Station':
+            
+            self.rotate_speed = 2   
+            
+            self.vMov = np.array([0., 0., 1.]) 
+            
+            self.radar = radar.Radar(self.spherePos, self.h)                     
+            
+            self.attPolicy = _para_with_boundry.para(-1, len(self.radar.TAP)-1)
+            
+            self.kidsARM = []
+                      
+        elif _type is 'UCAV':
+            
+            self.v.real = self.v.upper = 0.30
+            
+            self.vMotion = self.vMov*self.v.real                
+            
+            self.radar = radar.Radar(self.spherePos, self.h)                     
+            
+            self.attPolicy = _para_with_boundry.para(-1, len(self.radar.TAP)-1)
+            
+            self.kidsARM = []
+                                
+        elif _type is 'Missile':
+            
+            self.have_radar = False
+                      
+            self.h = _para_with_boundry.para(father.h.real, father.h.upper, father.h.lower)
+            
+            self.spherePos[0:3] = father.spherePos[0:3]
+            
+            self.vMov = father.vMov[0:3]
+          
+            self.v.real = self.v.upper = 0.60
+            
+            self.vMotion = self.vMov*self.v.real
+            
+        if father is None:
+            
+            self.h.upper, self.h.lower = H_MAX, H_MIN
+            
+            self.h.random(0.5)
+                
+            self.spherePos[0:2] = (self.spherePos[0:2]-MAP_CENTER) * PIX_PRO 
+              
+            self.spherePos[2] = util.coordinateSphere(self.spherePos, self.h.real)
+            
+        self.scale = _scale  
+            
+        self._type = _type  
+                  
+        self.frame_change()
+                    
+    #--------------------------------------------------------------------------    
+    def frame_change(self):
+        
+        th_earth = asin(self.spherePos[2] / np.linalg.norm(self.spherePos))
+            
+        fi_earth = atan2(self.spherePos[1], self.spherePos[0])
+        
+        # earth to local
+        _Cxyz_earth = np.array([[ sin(fi_earth), -cos(fi_earth)*sin(th_earth), cos(fi_earth)*cos(th_earth)],
+                                [-cos(fi_earth), -sin(fi_earth)*sin(th_earth), sin(fi_earth)*cos(th_earth)], 
+                                [             0,                cos(th_earth),               sin(th_earth)]])
+      
+#        vMov_local = self.vMov.dot(_Cxyz_earth)
+        
+        vMov_local = self.vMov
+    
+        th_local = asin(vMov_local[2])
+            
+        fi_local = atan2(vMov_local[1], vMov_local[0])
+        
+        # local to airbone
+        _Cxyz_local = np.array([[ sin(fi_local), cos(fi_local)*cos(th_local), -cos(fi_local)*sin(th_local)],
+                                [-cos(fi_local), sin(fi_local)*cos(th_local), -sin(fi_local)*sin(th_local)], 
+                                [             0,               sin(th_local),                cos(th_local)]])
+    
+        amax = self.amax_get(th_local)  
+        
+        self._Cxyz['local'], self._Cxyz['earth'], self.amax = _Cxyz_local, _Cxyz_earth, amax
+    
+    #-------------------------------------------------------------------------- 
+    def amax_get(self, th):
+        
+        g = 9.8
+        
+        ax = g * (OVERLOAD[self._type][1]**2-1) **0.5
+        
+        ay = g * (OVERLOAD[self._type][0]-sin(th))
+        
+        az = g * (OVERLOAD[self._type][1]-cos(th))
+        
+        return np.array([ax, ay, az])/1e3 # km/s2
+       
+    #--------------------------------------------------------------------------             
+    def pos_plan(self, dt, aMov):
+        
+        "aMov is a local para"
+       
+        vMotion_, v_ = self.av_plan(dt, aMov)
+    
+        Pos = self.spherePos+vMotion_*dt
+            
+        h = util.coordinateHeight(Pos)
+        
+        Pos[:2] = np.clip(Pos[:2], -7.5, 7.5)
+        
+        h = np.clip(h, 0.5, 8)
+        
+        Pos[2] = util.coordinateSphere(Pos, h)
+        
+        self.vMotion = (Pos-self.spherePos) / dt 
+        
+        self.v.real = np.linalg.norm(self.vMotion)                    
+        
+        if self.v.real: # not static
+        
+            self.vMov = self.vMotion/self.v.real
+                    
+        self.frame_change() 
+        
+        self.spherePos = Pos
+                                
+        self.h.real = h
+        
+        self.travel += self.v.real*dt
+        
+    #--------------------------------------------------------------------------   
+    def av_plan(self, dt, aMov):
+        
+        aMov_air = aMov.dot(self._Cxyz['local'])
+        
+        aMov_air[aMov_air == 0] = 1e-5
+        
+        amax_ = self.amax*np.sign(aMov_air)
+        
+        amax_[amax_ == 0] = 1
+        
+        al = 1e5*aMov_air
+        
+        c = max(al/amax_)
+        
+#        acc = (al/c).dot(np.transpose(self._Cxyz['local'])).dot(np.transpose(self._Cxyz['earth']))
+        
+        acc = (al/c).dot(np.transpose(self._Cxyz['local']))
+        
+        vMotion_ = acc*dt+self.vMotion
+        
+        v_ = np.linalg.norm(vMotion_)
+        
+        k = v_ / self.v.upper
+        
+        if k > 1: # repair v motion with constant acc controler
+            
+            vMotion_ /= k
+            
+            self.aMotion = (vMotion_-self.vMotion)/dt
+            
+            v_ = self.v.upper
+            
+        else: 
+        
+            self.aMotion = acc
+            
+        return vMotion_, v_                                             
+       
+    #-------------------------------------------------------------------------- 
+    def update(self, dt):
+        
+        "更新"
+        
+        self.update_actBoundry() 
+        
+        if hasattr(self, 'kidsARM'):
+        
+            for ARM_ in self.kidsARM: ARM_[0].update(dt)
+                   
+        self.x = self.spherePos[0]/PIX_PRO+MAP_CENTER[0]
+        
+        self.y = self.spherePos[1]/PIX_PRO+MAP_CENTER[1]
+        
+        if self._type is 'Station':
+            
+            self.rotation += self.rotate_speed
+        
+        else:
+
+            rotation = atan2(self.vMov[1], self.vMov[0]) 
+                
+            self.rotation = 90-degrees(rotation)
+          
+    #--------------------------------------------------------------------------         
+    def update_actBoundry(self):
+        
+        "动作边界更新"
+        
+        if hasattr(self, 'attPolicy'):
+            
+            if self.Num['missiles']:
+                
+                self.attPolicy = _para_with_boundry.para(-1, len(self.radar.TAP)-1)
+                
+            else: self.attPolicy = _para_with_boundry.para(-1)
+            
+    #--------------------------------------------------------------------------
+    def operation(self, target):
+        
+            if self.have_radar:
+                                        
+                dis, vec, targetRCS = target.cRCS(self.spherePos)
+            
+                dR_ = self.radar.dR[self.radar.mode]*targetRCS**0.25
+                
+                self.radar.operation(
+                                     target, 
+                                     dis, 
+                                     self.visDetection(dis, vec, dR_)
+                )
+                
+    #--------------------------------------------------------------------------         
+    def cRCS(self, observerPos):
+        
+        "等效隐身参数"
+                
+        dis, vec = util.displacement(observerPos, self.spherePos) 
+        
+        RCS = self.RCS
+ 
+        # 假设是线性变化
+        if self._type is 'UCAV':
+            
+            angle = degrees(acos(vec.dot(self.vMov)))
+            
+            if angle > 90: RCS = self.RCS * (1.8+0.004-0.01*angle) 
+    
+        return dis, vec, RCS     
+    
+    #-------------------------------------------------------------------------- 
+    def visDetection(self, dis, vec, R):  
+        
+        "视距隐藏"
+        
+        vis = True # 默认可视
+ 
+        if dis > R:
+            
+            vis = False
+            
+        else:
+            
+            H = R_EARTH+self.h.real
+            
+            # 计算地面方向切角 
+            crossAngle_toEarth = pi/2-acos(R_EARTH/H) # beta    
+            
+            if dis > H*cos(crossAngle_toEarth):
+                
+                # 计算目标方向夹角 
+                crossAngle_toTarget = acos(-self.spherePos[0:3].dot(vec) / H)  
+                
+                if crossAngle_toTarget < crossAngle_toEarth: 
+                    
+                    vis = False
+        
+        return vis
+    
+    #--------------------------------------------------------------------------
+    def checkingLib(self):
+        
+            if self.have_radar: self.radar.checkingLib()
+
+    #--------------------------------------------------------------------------
+    def guidance(self, dt, targetPos):
+        
+        "导引"
+            
+        dis, aMov = util.displacement(self.spherePos, targetPos) 
+        
+        self.pos_plan(dt, aMov, repair=True)                                   
+        
+    #--------------------------------------------------------------------------                   
+    def collision(self, players, father=None):
+        
+        "碰撞"
+                 
+        for player in players:
+
+            if player is father and self.travel/self.v.upper < 5: continue # 在弹射保护期内   
+            
+            if player is self: continue
+             
+            dis, vec = util.displacement(self.spherePos, player.spherePos) 
+                    
+            dis_obj = self.collisionRadius(vec) * self.scale
+            
+            dis_sub = player.collisionRadius(-vec) * self.scale
+    
+            if dis <= (dis_obj+dis_sub) * PIX_PRO:          
+            
+                self.is_dead = player.is_dead = True
+                
+                self.batch = player.batch = None
+        
+                return True 
+                                              
+        return False
+    
+    #--------------------------------------------------------------------------
+    def collisionRadius(self, vec):
+        
+        "计算碰撞方向的距离"
+        
+        if not sum(vec):
+            
+            return max(self.image.width, self.image.height)
+        
+        else:
+            
+            VP = vec.dot(self.vMov)
+            
+            VO = np.linalg.norm(vec-VP*self.vMov) 
+            
+            vExtend = 1e5*abs(np.array([VO, VP])) # 求边界交点
+                                    
+            return np.linalg.norm(vExtend/max(vExtend/self.volume))  
+               
+    #--------------------------------------------------------------------------
+    def cESE(self, disp):
+        
+        "整理state"
+      
+        state = [
+                 self.spherePos[0]/15+0.5,        
+                 self.spherePos[1]/15+0.5,
+                 (self.h.real-0.5) / 7.5,
+        ]
+        
+        vn = self.vMotion/self.v.upper
+        
+        state = np.concatenate((state, vn, disp))                  
+
+        self.pointState.append(state)     
+  
