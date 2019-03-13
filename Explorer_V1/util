@@ -1,0 +1,97 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Aug  9 19:54:15 2018
+
+@author: EW-{Shixun You}
+"""
+
+import math
+import numpy as np
+import numpy.random as npr
+
+R_EARTH = 6371.0
+
+#------------------------------------------------------------------------------ 
+def centerImage(image):
+    
+    "Sets an image's anchor point to its center"
+    
+    image.anchor_x = image.width/2
+    
+    image.anchor_y = image.height/2
+    
+#------------------------------------------------------------------------------         
+def locationRandom(referencePoint, Num=None, R=None):
+    
+    "位置生成"
+       
+    sites = []
+    
+    angle = math.pi*2*npr.random()
+    
+    if Num is None: Num = 1
+    
+    for i in range(Num):
+        
+        if R is not None: # circle-layout sites
+        
+            site = [referencePoint[0]+R*math.cos(angle), referencePoint[1]+R*math.sin(angle)]
+            
+            angle = (angle+2*math.pi/Num) % (2*math.pi)
+        
+        else: site = 2*(referencePoint)*np.clip(npr.random(2), 0.02, 0.98)
+       
+        sites.append(site)
+        
+    return sites   
+ 
+#------------------------------------------------------------------------------ 
+def displacement(point_1=np.array([0, 0, 0]), point_2=np.array([0, 0, 0])):
+    
+    "Returns the displacement between two points"
+    
+    vec = point_2-point_1  
+    
+    dis = np.linalg.norm(vec)  
+    
+    vec = (vec/dis if dis else vec)
+    
+    return dis, vec
+
+#------------------------------------------------------------------------------ 
+def unitV(angles):
+    
+    "生成单位向量"  
+    
+    unit_vector = np.array([math.cos(angles[1])*math.cos(angles[0]), 
+                            math.cos(angles[1])*math.sin(angles[0]), 
+                            math.sin(angles[1])])
+    
+    return unit_vector
+
+#------------------------------------------------------------------------------ 
+def coordinateSphere(Pos, h):
+    
+    "转化为以战略保护区为中心的球坐标系"     
+   
+    return math.sqrt((h+R_EARTH) **2 -Pos[0]**2-Pos[1]**2)
+
+#------------------------------------------------------------------------------
+def coordinateHeight(Pos):
+
+    dis =  displacement(Pos)[0]   
+
+    return (0 if not dis else dis-R_EARTH)
+
+#------------------------------------------------------------------------------     
+def collisionHandle(objects):
+    
+    "处理碰撞" 
+                          
+    for to_remove in objects:
+        
+        if to_remove.dead:
+            
+            to_remove.delete()
+            
+            objects.remove(to_remove)        
