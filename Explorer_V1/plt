@@ -1,0 +1,80 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Nov 18 11:39:13 2018
+@author: Administrator
+"""
+import numpy as np
+import matplotlib.pyplot as plt
+
+def metricPlt(
+              metric=None,
+              bench=None, 
+              train=None,              
+              EPSIODE=None, 
+              n=None, 
+              ver=None,
+    ):
+    
+    colorSet = {'A3C': 'red', 'DDPG':'green', 'PPO(CLIP)':'plum', 'PPO(KL)':'yellow'}
+    
+    if metric is None: metric='reward'
+    
+    rec_bench = []
+    
+    rec_train = {}
+   
+    if bench is not None: 
+    
+        for i in np.linspace(0, EPSIODE-n, EPSIODE/n, dtype=int):      
+            
+            rec_bench.append(sum(bench[i:i+n])/n)
+            
+        L = len(rec_bench)
+        
+    if train is not None:
+        
+        modeSet = list(train.keys())
+        
+        for Mode in modeSet:
+            
+            rec_train[Mode] = []
+        
+            for i in np.linspace(0, EPSIODE-n, EPSIODE/n, dtype=int):            
+               
+                rec_train[Mode].append(sum(train[Mode][i:i+n])/n)  
+            
+        L = len(rec_train[Mode])
+
+    N = np.linspace(1, L, L, dtype=int)
+    
+    plt.figure(figsize=(6, 3.5), dpi=500)    
+    
+    if bench is not None: plt.plot(N, rec_bench[:], label='Random', color='blue', linewidth=2)
+        
+    for Mode in modeSet:
+        
+        plt.plot(N, rec_train[Mode][:], label=Mode, color=colorSet[Mode], linewidth=2)  
+    
+    plt.xlabel("ITERATION")
+
+    if metric is 'reward':    
+    
+        plt.ylabel("MAR") 
+        
+        plt.ylim(-2.8, 1.5)   
+        
+    elif metric is 'angle':
+        
+        plt.ylabel("BHA") 
+        
+        plt.ylim(-0.1, 1.1)    
+    
+    plt.legend() 
+    
+    name= 'C:\\Users\\Administrator\\Desktop\\s\\'+ver+'_'+metric+'.jpg'
+       
+    plt.savefig(name, dpi=500) 
+    
+    plt.show()
+  
+          
