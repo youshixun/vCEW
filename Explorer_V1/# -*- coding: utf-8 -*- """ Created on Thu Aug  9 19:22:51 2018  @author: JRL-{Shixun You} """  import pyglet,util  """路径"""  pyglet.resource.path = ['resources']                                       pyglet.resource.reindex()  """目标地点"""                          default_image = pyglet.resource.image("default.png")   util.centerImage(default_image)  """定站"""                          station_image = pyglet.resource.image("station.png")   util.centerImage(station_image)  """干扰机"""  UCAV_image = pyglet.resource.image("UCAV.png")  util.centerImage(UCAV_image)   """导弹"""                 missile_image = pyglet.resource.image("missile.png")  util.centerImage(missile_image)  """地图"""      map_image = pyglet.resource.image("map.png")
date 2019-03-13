@@ -1,0 +1,41 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Aug  9 19:22:51 2018
+@author: JRL-{Shixun You}
+"""
+
+import pyglet,util
+
+"""路径"""
+
+pyglet.resource.path = ['resources'] 
+                                    
+pyglet.resource.reindex()
+
+"""目标地点"""           
+             
+default_image = pyglet.resource.image("default.png") 
+
+util.centerImage(default_image)
+
+"""定站"""           
+             
+station_image = pyglet.resource.image("station.png") 
+
+util.centerImage(station_image)
+
+"""干扰机"""
+
+UCAV_image = pyglet.resource.image("UCAV.png")
+
+util.centerImage(UCAV_image)
+ 
+"""导弹"""               
+
+missile_image = pyglet.resource.image("missile.png")
+
+util.centerImage(missile_image)
+
+"""地图"""    
+
+map_image = pyglet.resource.image("map.png")   
