@@ -1,0 +1,58 @@
+# -*- coding: utf-8 -*-
+""""
+Created on Thu Aug  9 19:54:15 2018 
+@author: Radar_Jamming_Laboratory. 204-{Shixun You}
+
+"""
+
+import numpy.random as npr
+
+class para:   
+    
+    "para with boundry" 
+    
+    def __init__(self, real, upper=None, lower=None):
+       
+        self.real = real
+        
+        self.upper = (real if upper is None else upper)
+        
+        self.lower = (real if lower is None else lower)
+        
+    #--------------------------------------------------------------------------
+    def random(self, f=None):
+        
+        if f is None: f = 1.
+        
+        cen = (self.upper-self.lower)/2
+        
+        upper = cen+f * (self.upper-cen)
+        
+        lower = cen-f * (cen-self.lower)
+        
+        self.real = lower+ (upper-lower) * npr.random()
+        
+        return self.real
+    
+    #--------------------------------------------------------------------------
+    def in_boundry(self, f=None):
+        
+        if self.lower <= self.real <= self.upper:
+            
+            return True
+        
+        else:
+            
+            return False
+        
+""                                                                           ""
+"""---------------------------------test fuction----------------------------"""
+""                                                                           ""   
+if __name__ == '__main__':
+    
+    a = para(0.68, 0.68, 0)
+    
+    print(a.real, a.upper, a.lower)
+    
+    a.random()
+         
