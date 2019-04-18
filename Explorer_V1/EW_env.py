@@ -165,7 +165,7 @@ class ElectronicWarfare_Env(object):
         # reward shaping             
         angle_behavior = math.acos(aMov.dot(vec_r))/math.pi
         
-        reward = -np.linalg.norm(disp_r)
+        reward -= np.linalg.norm(disp_r)
         
         reward += self.search_reward(Att)
         
